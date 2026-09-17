@@ -1,0 +1,15 @@
+.env
+.venv/
+.runtime/
+python-*.zip
+python-*.exe
+python-install*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/*.db
+data/*.json
+data/audio/
+data/models/
+logs/
+wechatauto_logs/

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wx-trade-alert"
+version = "0.1.0"
+description = "WeChat group trade-signal monitor and voice-call alert"
+requires-python = ">=3.10,<3.13"
+
+[tool.setuptools.packages.find]
+include = ["wx_trade_alert*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
