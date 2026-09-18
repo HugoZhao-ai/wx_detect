@@ -22,7 +22,8 @@
 - 支持美股股票及美股 Call/Put 期权。
 - 默认置信度阈值为 `0.70`。
 - 相同结构化动作默认在 10 分钟内只告警一次。
-- 只把目标成员最近 5 分钟、最多 8 条消息作为上下文发送给 DeepSeek。
+- 每次启动创建一个本地会话 JSON，保存本次启动以来目标成员的全部消息。
+- 每次有新消息时，将该会话 JSON 的完整内容发送给 DeepSeek，并只判断最新增量。
 - 连续短消息可以合并理解，例如先发 `aapl 9/18 325p`，再发 `买9.25的`。
 
 ## 使用前须知
@@ -290,6 +291,34 @@ cd wx_detect
 
 按 `Ctrl+C` 只会结束日志查看，不会停止在另一个窗口运行的监控。
 
+### 本次启动的会话 JSON
+
+每次运行 `.\run.ps1`，程序都会在下面的目录新建一个文件：
+
+```text
+data/sessions/YYYY-MM-DD_HH-mm-ss.json
+```
+
+文件包含本次启动时间、群名、被监听成员，以及每条消息的微信时间、类型、发送者和正文。语音消息保存本地转写后的文字。例如：
+
+```json
+{
+  "session_started_at": "2026-09-18T16:50:30+08:00",
+  "group_name": "多空双杀华尔街",
+  "target_member": "华尔街之狼",
+  "latest_message_key": "45374963958@chatroom:71:1789720683000",
+  "messages": [
+    {
+      "message_type": "文本",
+      "spoken_at": "2026-09-18T16:38:03+08:00",
+      "text": "我走了一半儿，我走了一半儿。"
+    }
+  ]
+}
+```
+
+新消息会先原子写入该文件，再把完整 JSON 交给 DeepSeek。模型使用全部历史理解上下文，但只判断 `latest_message_key` 指向的最新消息。程序重启会创建新文件，不会把上一次运行的消息带入新会话。
+
 常用运行参数：
 
 | 配置 | 默认值 | 说明 |
@@ -299,8 +328,6 @@ cd wx_detect
 | `CALLS_PER_HOUR` | `5` | 每小时最多尝试的呼叫次数 |
 | `CALL_MAX_ATTEMPTS` | `2` | 一次告警呼叫失败后的最大尝试次数 |
 | `CALL_RETRY_SECONDS` | `60` | 呼叫失败后的等待时间 |
-| `TARGET_CONTEXT_MESSAGES` | `8` | 最多保留的目标成员上下文消息数 |
-| `TARGET_CONTEXT_WINDOW_SECONDS` | `300` | 上下文有效时间，单位为秒 |
 
 长期运行时可以使用 Windows 任务计划程序设置“用户登录后”启动 `run.ps1`。必须选择“仅当用户登录时运行”，不要选择“无论用户是否登录都运行”，否则微信界面发送和呼叫不可用。
 
@@ -332,12 +359,14 @@ CPU 模式首次加载模型需要一些时间。可以把 `WHISPER_MODEL` 改�
 
 ## 数据和隐私
 
-- DeepSeek 只接收目标成员当前消息及限定窗口内的目标成员上下文，不上传其他群成员的消息。
+- DeepSeek 会接收本次启动以来目标成员的完整会话 JSON，不上传其他群成员的普通消息。
+- 会话越长，每次请求发送的上下文越多，API 用量和响应时间也会逐渐增加；重启程序会开始一个新会话。
 - 语音先在本机转写，DeepSeek 接收的是转写后的文本。
 - 运行状态保存在 `data/state.db`。
 - 监听进度保存在 `data/listener_watermark.json`。
+- 本次启动的目标成员消息保存在 `data/sessions/*.json`。
 - 下载的语音保存在 `data/audio/`。
-- `.env`、运行数据库、音频、模型和日志均被 Git 忽略。
+- `.env`、运行数据库、会话 JSON、音频、模型和日志均被 Git 忽略。
 
 ## 开发与测试
 
@@ -354,6 +383,7 @@ wx_trade_alert/
   config.py          .env 配置加载与校验
   detector.py        DeepSeek 交易信号分类
   models.py          消息与交易信号模型
+  session_log.py     本次启动的增量会话 JSON
   service.py         监听、处理、告警主流程
   speech.py          SILK 解码和 Faster-Whisper 转写
   state.py           SQLite 队列、上下文和去重状态

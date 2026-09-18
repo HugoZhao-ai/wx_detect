@@ -9,6 +9,7 @@ from pathlib import Path
 from .config import Settings
 from .detector import DeepSeekDetector
 from .models import IncomingMessage, TradeSignal
+from .session_log import SessionMessageLog
 from .speech import SpeechTranscriber
 from .state import StateStore
 from .wechat_adapter import WeChatAdapter
@@ -64,10 +65,17 @@ class MonitorService:
         self.wechat = WeChatAdapter(settings)
         self.stop_event = threading.Event()
         self._worker: threading.Thread | None = None
+        self.session_log: SessionMessageLog | None = None
 
     def start(self) -> None:
         if not self.settings.deepseek_api_key:
             raise RuntimeError("请先在 .env 中配置新的 DEEPSEEK_API_KEY")
+        self.session_log = SessionMessageLog.create(
+            self.settings.session_dir,
+            self.settings.group_name,
+            self.settings.target_member,
+        )
+        LOG.info("本次会话 JSON：%s", self.session_log.path)
         self._worker = threading.Thread(target=self._worker_loop, name="signal-worker", daemon=True)
         self._worker.start()
         self.wechat.start_listener(self._on_message)
@@ -133,11 +141,24 @@ class MonitorService:
         if not source:
             LOG.info("消息没有可分析文本，跳过")
             return
-        context = self.state.get_context(
-            self.settings.context_messages,
-            self.settings.context_window_seconds,
+        if self.session_log is None:
+            raise RuntimeError("本次会话 JSON 尚未初始化")
+        message = IncomingMessage(
+            chat_wxid=str(row["chat_wxid"]),
+            local_id=int(row["local_id"]),
+            sort_seq=int(row["sort_seq"]),
+            msg_type=str(row["msg_type"]),
+            sender_username=str(row["sender_username"]),
+            create_time=float(row["create_time"]),
+            content=source,
         )
-        signal = self.detector.classify(source, context)
+        session_data = self.session_log.append_message(message, source)
+        LOG.info(
+            "已写入会话 JSON：messages=%d latest=%s",
+            len(session_data["messages"]),
+            session_data["latest_message_key"],
+        )
+        signal = self.detector.classify_session(session_data)
         should_alert = signal.should_alert(self.settings.confidence_threshold)
         LOG.info(
             "模型判定：confidence=%.3f threshold=%.3f should_alert=%s action=%s "
@@ -149,11 +170,6 @@ class MonitorService:
             signal.asset_type,
             signal.symbol or "-",
             signal.to_json(),
-        )
-        self.state.add_context(
-            source,
-            self.settings.context_messages,
-            created_at=float(row["create_time"]),
         )
         if not should_alert:
             self._cleanup_audio(audio_path)

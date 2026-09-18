@@ -50,8 +50,6 @@ class Settings:
     voice_download_retry_seconds: float
     keep_voice_hours: int
     listener_interval_seconds: float
-    context_messages: int
-    context_window_seconds: int
     calls_enabled: bool
     send_alert_message: bool
     dry_run: bool
@@ -64,6 +62,10 @@ class Settings:
     @property
     def audio_dir(self) -> Path:
         return self.data_dir / "audio"
+
+    @property
+    def session_dir(self) -> Path:
+        return self.data_dir / "sessions"
 
     @property
     def state_db(self) -> Path:
@@ -106,8 +108,6 @@ class Settings:
             voice_download_retry_seconds=_as_float("VOICE_DOWNLOAD_RETRY_SECONDS", 2),
             keep_voice_hours=_as_int("KEEP_VOICE_HOURS", 24),
             listener_interval_seconds=_as_float("LISTENER_INTERVAL_SECONDS", 0.8),
-            context_messages=_as_int("TARGET_CONTEXT_MESSAGES", 8),
-            context_window_seconds=_as_int("TARGET_CONTEXT_WINDOW_SECONDS", 300),
             calls_enabled=_as_bool("CALLS_ENABLED", False),
             send_alert_message=_as_bool("SEND_ALERT_MESSAGE", True),
             dry_run=_as_bool("DRY_RUN", True),
@@ -116,6 +116,7 @@ class Settings:
         settings.validate()
         settings.data_dir.mkdir(parents=True, exist_ok=True)
         settings.audio_dir.mkdir(parents=True, exist_ok=True)
+        settings.session_dir.mkdir(parents=True, exist_ok=True)
         return settings
 
     def validate(self) -> None:
@@ -125,7 +126,5 @@ class Settings:
             raise ValueError("ALERT_CONFIDENCE_THRESHOLD 必须在 0 到 1 之间")
         if self.calls_per_hour < 1 or self.call_max_attempts < 1:
             raise ValueError("通话限额和尝试次数必须大于 0")
-        if self.context_messages < 1 or self.context_window_seconds < 1:
-            raise ValueError("上下文消息数和时间窗口必须大于 0")
         if self.silk_sample_rate not in {8000, 12000, 16000, 24000, 32000, 44100, 48000}:
             raise ValueError("SILK_SAMPLE_RATE 不是受支持的采样率")

@@ -11,6 +11,7 @@ data/*.db
 data/*.json
 data/audio/
 data/models/
+data/sessions/
 logs/
 wechatauto_logs/
 @AutomationLog.txt
