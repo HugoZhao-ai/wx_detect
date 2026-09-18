@@ -83,12 +83,27 @@ class MonitorService:
             LOG.debug("忽略非文本/语音消息 type=%s", message.msg_type)
             return
         if self.state.enqueue(message):
-            LOG.info("已入队：local_id=%s type=%s", message.local_id, message.msg_type)
+            preview = (
+                message.content.strip().replace("\n", " ")[:120]
+                if message.msg_type == TEXT_TYPE
+                else "[语音消息，等待转写]"
+            )
+            LOG.info(
+                "抓到目标消息：local_id=%s type=%s sender=%s content=%s",
+                message.local_id,
+                message.msg_type,
+                message.sender_username,
+                preview,
+            )
 
     def _worker_loop(self) -> None:
+        next_heartbeat = time.monotonic()
         while not self.stop_event.is_set():
             row = self.state.claim_next()
             if row is None:
+                if time.monotonic() >= next_heartbeat:
+                    LOG.info("监控心跳：监听线程正常，队列状态=%s", self.state.status_counts())
+                    next_heartbeat = time.monotonic() + 60
                 self.stop_event.wait(0.5)
                 continue
             try:
@@ -116,13 +131,24 @@ class MonitorService:
             self.settings.context_window_seconds,
         )
         signal = self.detector.classify(source, context)
-        LOG.info("判定：%s", signal.to_json())
+        should_alert = signal.should_alert(self.settings.confidence_threshold)
+        LOG.info(
+            "模型判定：confidence=%.3f threshold=%.3f should_alert=%s action=%s "
+            "asset=%s symbol=%s result=%s",
+            signal.confidence,
+            self.settings.confidence_threshold,
+            should_alert,
+            signal.action,
+            signal.asset_type,
+            signal.symbol or "-",
+            signal.to_json(),
+        )
         self.state.add_context(
             source,
             self.settings.context_messages,
             created_at=float(row["create_time"]),
         )
-        if not signal.should_alert(self.settings.confidence_threshold):
+        if not should_alert:
             self._cleanup_audio(audio_path)
             return
         fingerprint = signal.fingerprint()

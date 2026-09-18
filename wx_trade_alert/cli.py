@@ -5,6 +5,8 @@ import json
 import logging
 import sys
 import time
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from .config import Settings
 from .detector import DeepSeekDetector
@@ -14,13 +16,35 @@ from .state import StateStore
 from .wechat_adapter import WeChatAdapter
 
 
-def setup_logging(level: str) -> None:
+def setup_logging(level: str, project_dir: Path) -> None:
+    log_dir = project_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_level = getattr(logging, level, logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s | %(message)s"
+    )
+    root_stream_handler = logging.StreamHandler(sys.stdout)
+    root_stream_handler.setFormatter(formatter)
+    package_stream_handler = logging.StreamHandler(sys.stdout)
+    package_stream_handler.setFormatter(formatter)
+    file_handler = RotatingFileHandler(
+        log_dir / "monitor.log",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
     logging.basicConfig(
-        level=getattr(logging, level, logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s | %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        level=log_level,
+        handlers=[root_stream_handler],
         force=True,
     )
+    package_logger = logging.getLogger("wx_trade_alert")
+    package_logger.handlers.clear()
+    package_logger.setLevel(log_level)
+    package_logger.addHandler(package_stream_handler)
+    package_logger.addHandler(file_handler)
+    package_logger.propagate = False
 
 
 def doctor(settings: Settings) -> int:
@@ -119,7 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     try:
         settings = Settings.load()
-        setup_logging(settings.log_level)
+        setup_logging(settings.log_level, settings.project_dir)
         args = build_parser().parse_args(argv)
         if args.command == "doctor":
             return doctor(settings)

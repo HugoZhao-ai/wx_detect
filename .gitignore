@@ -13,3 +13,4 @@ data/audio/
 data/models/
 logs/
 wechatauto_logs/
+@AutomationLog.txt

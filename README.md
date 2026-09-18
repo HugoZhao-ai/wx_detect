@@ -273,6 +273,23 @@ CALLS_ENABLED=true
 
 保持 PowerShell、微信和当前 Windows 用户会话运行。按 `Ctrl+C` 可以安全停止。
 
+另开一个 PowerShell 窗口，可以实时查看是否抓到消息以及模型是否达到告警阈值：
+
+```powershell
+cd wx_detect
+.\watch.ps1
+```
+
+日志中的关键内容包括：
+
+- `监控心跳`：每分钟输出一次，表示监听进程仍在正常运行。
+- `抓到目标消息`：显示消息类型、发送者和文本摘要。
+- `模型判定`：显示 `confidence`、`threshold` 和 `should_alert`。
+- `should_alert=True`：达到阈值并进入告警流程。
+- `告警消息发送结果` 和 `呼叫第 N 次`：显示真实告警执行结果。
+
+按 `Ctrl+C` 只会结束日志查看，不会停止在另一个窗口运行的监控。
+
 常用运行参数：
 
 | 配置 | 默认值 | 说明 |
@@ -346,4 +363,5 @@ setup.ps1            安装便携 Python 和依赖
 doctor.ps1           只读环境检查
 probe.ps1            只读实时消息探针
 run.ps1              启动监控
+watch.ps1            实时查看监控日志
 ```
