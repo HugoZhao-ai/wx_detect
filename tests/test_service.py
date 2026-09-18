@@ -22,3 +22,18 @@ def test_format_alert_contains_price_and_related_messages():
     text = format_alert(signal, "aapl 9/18 325p | 买9.25的", 0)
     assert "价格 9.25" in text
     assert "关联消息：aapl 9/18 325p | 买9.25的" in text
+
+
+def test_format_alert_labels_self_report_without_symbol():
+    signal = TradeSignal.from_dict(
+        {
+            "is_trade_signal": True,
+            "is_self_reported_action": True,
+            "action": "reduce",
+            "confidence": 0.75,
+            "quantity": "一半",
+        }
+    )
+    text = format_alert(signal, "我走了一半", 0)
+    assert "类型：本人操作反馈" in text
+    assert "标的：消息未明确" in text

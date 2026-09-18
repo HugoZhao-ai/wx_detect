@@ -93,7 +93,7 @@ class Settings:
             deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/"),
             deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-flash").strip(),
             deepseek_timeout_seconds=_as_float("DEEPSEEK_TIMEOUT_SECONDS", 30),
-            confidence_threshold=_as_float("ALERT_CONFIDENCE_THRESHOLD", 0.85),
+            confidence_threshold=_as_float("ALERT_CONFIDENCE_THRESHOLD", 0.70),
             dedupe_minutes=_as_int("DEDUPE_MINUTES", 10),
             calls_per_hour=_as_int("CALLS_PER_HOUR", 5),
             call_max_attempts=_as_int("CALL_MAX_ATTEMPTS", 2),

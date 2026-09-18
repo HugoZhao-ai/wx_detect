@@ -33,6 +33,33 @@ def test_unknown_symbol_does_not_alert():
     assert not signal.should_alert(0.85)
 
 
+def test_self_reported_action_alerts_without_symbol():
+    signal = TradeSignal.from_dict(
+        {
+            "is_trade_signal": True,
+            "is_self_reported_action": True,
+            "confidence": 0.70,
+            "asset_type": "option",
+            "action": "reduce",
+            "quantity": "一半",
+            "evidence": "我走了一半",
+        }
+    )
+    assert signal.should_alert(0.70)
+
+
+def test_self_reported_action_still_respects_threshold():
+    signal = TradeSignal.from_dict(
+        {
+            "is_trade_signal": True,
+            "is_self_reported_action": True,
+            "confidence": 0.69,
+            "action": "reduce",
+        }
+    )
+    assert not signal.should_alert(0.70)
+
+
 def test_fingerprint_ignores_explanation():
     a = TradeSignal(True, "buy", "stock", "AAPL", confidence=0.9, reason="a")
     b = TradeSignal(True, "buy", "stock", "AAPL", confidence=0.95, reason="b")

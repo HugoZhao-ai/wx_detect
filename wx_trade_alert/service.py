@@ -24,6 +24,7 @@ def format_alert(signal: TradeSignal, source: str, occurred_at: float) -> str:
         "add": "加仓", "reduce": "减仓", "open": "开仓", "close": "平仓",
         "roll": "滚仓", "exercise": "行权", "cancel": "撤单",
     }
+    alert_kind = "本人操作反馈" if signal.is_self_reported_action else "交易指令"
     asset = "期权" if signal.asset_type == "option" else "股票"
     option = f" {signal.option_type.upper()}" if signal.option_type in {"call", "put"} else ""
     detail_parts = []
@@ -37,11 +38,17 @@ def format_alert(signal: TradeSignal, source: str, occurred_at: float) -> str:
         detail_parts.append(f"数量 {signal.quantity}")
     extras = "；".join(detail_parts)
     at = datetime.fromtimestamp(occurred_at).strftime("%Y-%m-%d %H:%M:%S")
+    instrument = (
+        f"{signal.symbol} {asset}{option}"
+        if signal.symbol
+        else "消息未明确"
+    )
     return (
         "【交易动作告警】\n"
         f"时间：{at}\n"
+        f"类型：{alert_kind}\n"
         f"动作：{action_labels.get(signal.action, signal.action)}\n"
-        f"标的：{signal.symbol} {asset}{option}\n"
+        f"标的：{instrument}\n"
         f"细节：{extras or '消息未提供'}\n"
         f"置信度：{signal.confidence:.0%}\n"
         f"关联消息：{source[:300]}"

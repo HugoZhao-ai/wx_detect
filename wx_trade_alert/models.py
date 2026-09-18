@@ -29,6 +29,7 @@ class TradeSignal:
     evidence: str = ""
     reason: str = ""
     price: str = ""
+    is_self_reported_action: bool = False
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "TradeSignal":
@@ -64,15 +65,16 @@ class TradeSignal:
             evidence=str(value.get("evidence", "")).strip()[:300],
             reason=str(value.get("reason", "")).strip()[:500],
             price=str(value.get("price", "")).strip()[:80],
+            is_self_reported_action=value.get("is_self_reported_action") is True,
         )
 
     def should_alert(self, threshold: float) -> bool:
+        has_instrument = self.asset_type in {"stock", "option"} and bool(self.symbol)
         return (
             self.is_trade_signal
             and self.confidence >= threshold
             and self.action not in {"unknown", "hold"}
-            and self.asset_type in {"stock", "option"}
-            and bool(self.symbol)
+            and (has_instrument or self.is_self_reported_action)
         )
 
     def fingerprint(self) -> str:
