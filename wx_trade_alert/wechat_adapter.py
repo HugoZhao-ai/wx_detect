@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +11,17 @@ from .config import Settings
 from .models import IncomingMessage
 
 LOG = logging.getLogger(__name__)
+GROUP_SENDER_PREFIX = re.compile(
+    r"^(?P<sender>wxid_[0-9A-Za-z_-]+|[0-9A-Za-z_-]+@chatroom):\s*"
+)
+
+
+def _split_group_sender(content: str) -> tuple[str, str]:
+    """Extract the sender wxid embedded by WeChat 4.x in group-message content."""
+    match = GROUP_SENDER_PREFIX.match(content)
+    if not match:
+        return "", content
+    return match.group("sender"), content[match.end():]
 
 
 @dataclass(frozen=True)
@@ -85,7 +97,9 @@ class WeChatAdapter:
         from wechatauto.db import Listener
 
         def on_raw(raw: dict, _listener) -> None:
-            sender = str(raw.get("sender_username") or "")
+            raw_content = str(raw.get("content") or "")
+            content_sender, content = _split_group_sender(raw_content)
+            sender = content_sender or str(raw.get("sender_username") or "")
             sender_id = int(raw.get("sender_id") or 0)
             is_target = sender in {self.targets.member_wxid, self.settings.target_member}
             if self.targets.target_is_self and sender_id == 2:
@@ -100,7 +114,7 @@ class WeChatAdapter:
                 msg_type=str(raw.get("type") or raw.get("local_type") or ""),
                 sender_username=sender,
                 create_time=float(raw.get("create_time") or time.time()),
-                content=str(raw.get("content") or ""),
+                content=content,
             )
             callback(event)
 
