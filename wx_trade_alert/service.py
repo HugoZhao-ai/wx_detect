@@ -25,7 +25,12 @@ def format_alert(signal: TradeSignal, source: str, occurred_at: float) -> str:
         "add": "加仓", "reduce": "减仓", "open": "开仓", "close": "平仓",
         "roll": "滚仓", "exercise": "行权", "cancel": "撤单",
     }
-    alert_kind = "本人操作反馈" if signal.is_self_reported_action else "交易指令"
+    if signal.signal_timing == "planned":
+        title = "【交易预告】"
+        alert_kind = "预告操作（仅消息）"
+    else:
+        title = "【交易动作告警】"
+        alert_kind = "本人操作反馈" if signal.is_self_reported_action else "交易指令"
     asset = "期权" if signal.asset_type == "option" else "股票"
     option = f" {signal.option_type.upper()}" if signal.option_type in {"call", "put"} else ""
     detail_parts = []
@@ -45,7 +50,7 @@ def format_alert(signal: TradeSignal, source: str, occurred_at: float) -> str:
         else "消息未明确"
     )
     return (
-        "【交易动作告警】\n"
+        f"{title}\n"
         f"时间：{at}\n"
         f"类型：{alert_kind}\n"
         f"动作：{action_labels.get(signal.action, signal.action)}\n"
@@ -159,19 +164,22 @@ class MonitorService:
             session_data["latest_message_key"],
         )
         signal = self.detector.classify_session(session_data)
-        should_alert = signal.should_alert(self.settings.confidence_threshold)
+        should_notify = signal.should_notify(self.settings.confidence_threshold)
+        should_call = signal.should_call(self.settings.confidence_threshold)
         LOG.info(
-            "模型判定：confidence=%.3f threshold=%.3f should_alert=%s action=%s "
-            "asset=%s symbol=%s result=%s",
+            "模型判定：confidence=%.3f threshold=%.3f timing=%s "
+            "should_notify=%s should_call=%s action=%s asset=%s symbol=%s result=%s",
             signal.confidence,
             self.settings.confidence_threshold,
-            should_alert,
+            signal.signal_timing,
+            should_notify,
+            should_call,
             signal.action,
             signal.asset_type,
             signal.symbol or "-",
             signal.to_json(),
         )
-        if not should_alert:
+        if not should_notify:
             self._cleanup_audio(audio_path)
             return
         fingerprint = signal.fingerprint()
@@ -185,7 +193,10 @@ class MonitorService:
         msg_ok, msg_detail = self.wechat.send_message(alert_text)
         LOG.info("告警消息发送结果：%s %s", msg_ok, msg_detail)
         self.state.mark_alerted(signal_id)
-        self._place_call(signal_id)
+        if should_call:
+            self._place_call(signal_id)
+        else:
+            LOG.info("预告操作仅发送消息，不发起语音通话")
         self._cleanup_audio(audio_path)
 
     def _place_call(self, signal_id: int) -> None:

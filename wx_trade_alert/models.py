@@ -12,6 +12,7 @@ ALLOWED_ACTIONS = {
 }
 ALLOWED_ASSETS = {"stock", "option", "unknown"}
 ALLOWED_OPTION_TYPES = {"call", "put", "unknown", ""}
+ALLOWED_SIGNAL_TIMINGS = {"immediate", "planned", "historical", "none"}
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class TradeSignal:
     reason: str = ""
     price: str = ""
     is_self_reported_action: bool = False
+    signal_timing: str = "immediate"
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "TradeSignal":
@@ -41,12 +43,18 @@ class TradeSignal:
         action = str(value.get("action", "unknown")).strip().lower()
         asset = str(value.get("asset_type", "unknown")).strip().lower()
         option_type = str(value.get("option_type", "")).strip().lower()
+        default_timing = "immediate" if truth else "none"
+        signal_timing = str(
+            value.get("signal_timing", default_timing)
+        ).strip().lower()
         if action not in ALLOWED_ACTIONS:
             action = "unknown"
         if asset not in ALLOWED_ASSETS:
             asset = "unknown"
         if option_type not in ALLOWED_OPTION_TYPES:
             option_type = "unknown"
+        if signal_timing not in ALLOWED_SIGNAL_TIMINGS:
+            signal_timing = default_timing
         try:
             confidence = min(1.0, max(0.0, float(value.get("confidence", 0))))
         except (TypeError, ValueError):
@@ -66,16 +74,22 @@ class TradeSignal:
             reason=str(value.get("reason", "")).strip()[:500],
             price=str(value.get("price", "")).strip()[:80],
             is_self_reported_action=value.get("is_self_reported_action") is True,
+            signal_timing=signal_timing,
         )
 
-    def should_alert(self, threshold: float) -> bool:
-        has_instrument = self.asset_type in {"stock", "option"} and bool(self.symbol)
+    def should_notify(self, threshold: float) -> bool:
         return (
             self.is_trade_signal
             and self.confidence >= threshold
             and self.action not in {"unknown", "hold"}
-            and (has_instrument or self.is_self_reported_action)
+            and self.signal_timing in {"immediate", "planned"}
         )
+
+    def should_call(self, threshold: float) -> bool:
+        return self.should_notify(threshold) and self.signal_timing == "immediate"
+
+    def should_alert(self, threshold: float) -> bool:
+        return self.should_notify(threshold)
 
     def fingerprint(self) -> str:
         core = {
@@ -86,6 +100,7 @@ class TradeSignal:
             "strike": self.strike,
             "expiry": self.expiry,
             "quantity": self.quantity,
+            "signal_timing": self.signal_timing,
         }
         raw = json.dumps(core, sort_keys=True, ensure_ascii=False).encode("utf-8")
         return hashlib.sha256(raw).hexdigest()

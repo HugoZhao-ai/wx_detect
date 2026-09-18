@@ -37,3 +37,20 @@ def test_format_alert_labels_self_report_without_symbol():
     text = format_alert(signal, "我走了一半", 0)
     assert "类型：本人操作反馈" in text
     assert "标的：消息未明确" in text
+
+
+def test_format_alert_labels_planned_action_as_message_only():
+    signal = TradeSignal.from_dict(
+        {
+            "is_trade_signal": True,
+            "signal_timing": "planned",
+            "action": "buy",
+            "asset_type": "stock",
+            "symbol": "SPY",
+            "price": "降到 500",
+            "confidence": 0.9,
+        }
+    )
+    text = format_alert(signal, "等到 SPY 降到 500 时买", 0)
+    assert text.startswith("【交易预告】")
+    assert "类型：预告操作（仅消息）" in text

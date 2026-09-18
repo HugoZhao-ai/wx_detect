@@ -26,11 +26,18 @@ def test_question_does_not_alert():
     assert not signal.should_alert(0.85)
 
 
-def test_unknown_symbol_does_not_alert():
+def test_immediate_action_without_symbol_notifies_and_calls():
     signal = TradeSignal.from_dict(
-        {"is_trade_signal": True, "confidence": 0.99, "asset_type": "stock", "action": "buy"}
+        {
+            "is_trade_signal": True,
+            "signal_timing": "immediate",
+            "confidence": 0.99,
+            "asset_type": "unknown",
+            "action": "buy",
+        }
     )
-    assert not signal.should_alert(0.85)
+    assert signal.should_notify(0.85)
+    assert signal.should_call(0.85)
 
 
 def test_self_reported_action_alerts_without_symbol():
@@ -58,6 +65,35 @@ def test_self_reported_action_still_respects_threshold():
         }
     )
     assert not signal.should_alert(0.70)
+
+
+def test_planned_action_notifies_without_calling():
+    signal = TradeSignal.from_dict(
+        {
+            "is_trade_signal": True,
+            "signal_timing": "planned",
+            "confidence": 0.9,
+            "asset_type": "stock",
+            "symbol": "SPY",
+            "action": "buy",
+        }
+    )
+    assert signal.should_notify(0.70)
+    assert not signal.should_call(0.70)
+
+
+def test_historical_action_neither_notifies_nor_calls():
+    signal = TradeSignal.from_dict(
+        {
+            "is_trade_signal": True,
+            "signal_timing": "historical",
+            "confidence": 0.95,
+            "action": "buy",
+            "quantity": "80",
+        }
+    )
+    assert not signal.should_notify(0.70)
+    assert not signal.should_call(0.70)
 
 
 def test_fingerprint_ignores_explanation():

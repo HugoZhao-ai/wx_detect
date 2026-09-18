@@ -97,7 +97,8 @@ def probe(settings: Settings, seconds: int) -> int:
 def test_classify(settings: Settings, text: str) -> int:
     signal = DeepSeekDetector(settings).classify(text, [])
     print(signal.to_json())
-    print(f"达到告警阈值：{signal.should_alert(settings.confidence_threshold)}")
+    print(f"发送告警消息：{signal.should_notify(settings.confidence_threshold)}")
+    print(f"发起语音通话：{signal.should_call(settings.confidence_threshold)}")
     return 0
 
 
